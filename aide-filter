@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# aide-filter, Sven Hartrumpf (c) 2021, licensed under GPLv3
+
+DB=/var/lib/aide/aide.db
+V="2021-04-05 10:00:00"
+umask 0077
+if [ "$1" == "-h" -o "$1" == "--help" ] ; then
+  echo "USAGE: aide-filter [<ref-date>]"
+  echo
+  echo "Filter report lines from aide output for files known to have changed through"
+  echo "package installations or updates via dpkg / apt."
+  echo
+  echo "EXAMPLES:"
+  echo "  aide.wrapper --update | aide-filter                (good for use in crontabs)"
+  echo "  cat aide.log | aide-filter '$V'   (after: aide.wrapper --update >& aide.log)"
+  echo
+  echo "If an argument <ref-date> is provided, it is used as the reference date;"
+  echo "otherwise the modification time of file $DB is taken."
+  echo "<ref-date> should match the date format in /var/log/dpkg.log, e.g. $V" 
+  exit 0
+fi
+
+if [ $# -eq 1 ] ; then
+  REFDATE=$1
+else
+  REFDATE=$( date -r $DB +"%Y-%m-%d %H:%M:%S" )
+fi
+AF=/var/tmp/aide-filter
+set -u # -x 
+grep -h " status installed " /var/log/dpkg.log.1 /var/log/dpkg.log | awk -v refdate="$REFDATE" '$1 >= refdate' > $AF.dpkg
+sed -e 's/.* status installed //g' $AF.dpkg | sed -e 's/ .*//g' > $AF.pkgs
+xargs -a $AF.pkgs dpkg -L 2>/dev/null | grep -v -e "^/\.$" | grep -e "^/" | sed -e 's/^/: /g' -e 's/$/\$/g' | sort -u > $AF.pats
+rg --regex-size-limit 800M --dfa-size-limit 10G -v -f $AF.pats

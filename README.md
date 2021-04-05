@@ -6,4 +6,4 @@ Developed and tested on Ubuntu systems.
 
 ## Requirements
 
-rg (rigpreg)
+rg (ripgrep)
